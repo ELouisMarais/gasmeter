@@ -1,0 +1,22 @@
+#!/bin/bash
+
+cd threadedServer
+echo "Building clientTest"
+g++ -Wall clientTest.cpp network/SocketClient.cpp -o clientTest -pthread
+echo "Building server"
+g++ -Wall server.cpp network/SocketServer.cpp network/ConnectionHandler.cpp -o server -pthread
+echo "Copying clientTest and server to ${HOME}/bin"
+cp clientTest ${HOME}/bin/
+cp server ${HOME}/bin/
+
+cd ..
+echo "Building countpulses"
+gcc -Wall countpulses.c -o countpulses -lwiringPi
+echo "Building gasmeter"
+gcc -Wall gasmeter.c -o gasmeter -lwiringPi -lwiringPiDev -lrt
+echo "Building intensity"
+gcc -Wall intensity.c -o intensity -lwiringPi
+
+cp countpulses ${HOME}/bin/
+cp gasmeter ${HOME}/bin/
+cp intensity ${HOME}/bin/
