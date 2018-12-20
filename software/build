@@ -17,6 +17,10 @@ gcc -Wall gasmeter.c -o gasmeter -lwiringPi -lwiringPiDev -lrt
 echo "Building intensity"
 gcc -Wall intensity.c -o intensity -lwiringPi
 
+echo "Copying countpulses, gasmeter and intensity to ${HOME}/bin/"
 cp countpulses ${HOME}/bin/
 cp gasmeter ${HOME}/bin/
 cp intensity ${HOME}/bin/
+
+echo "Copying broadcast.py to ${HOME}/bin"
+cp broadcast.py ${HOME}/bin/
