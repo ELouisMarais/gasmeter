@@ -21,6 +21,22 @@
 # Start data: 2018-09-18
 # Last modification: 2018-12-12
 
+# Louis Marais
+# Version 2.0
+# Start: 2020-09-23
+# Last modification: 2020-09-23
+#
+# Modifications:
+# ~~~~~~~~~~~~~~
+# 1. Added debugging capability
+# 2. Added some command line switches
+# 3. Added errorExit routine
+# 4. fixed old bug in code where the file being checked was path/target
+#    instead of path/[target][file]
+#
+#
+#
+
 import sys
 import time
 from socket import *
@@ -29,6 +45,34 @@ import subprocess
 import os
 import configparser
 import signal
+import datetime
+import argparse
+
+script = os.path.basename(__file__)
+VERSION = "2.0"
+AUTHORS = "Louis Marais"
+
+DEBUG = False
+
+# -----------------------------------------------------------------------------
+
+def ts():
+	now = datetime.datetime.now()
+	tsStr = now.strftime('%Y-%m-%d %H:%M:%S ')
+	return(tsStr)
+
+# -----------------------------------------------------------------------------
+
+def debug(msg):
+	if DEBUG:
+		print(ts(),msg)
+	return
+
+# -----------------------------------------------------------------------------
+
+def errorExit(s):
+	print('ERROR: '+s)
+	sys.exit(1)
 
 # -----------------------------------------------------------------------------
 
@@ -78,11 +122,9 @@ def checkConfigOptions(config,sectkeys):
 		sect = sectkey[0]
 		key = sectkey[1]
 		if not(checkConfigOption(config,sect,key)):
-			print('['+sect+']['+key+'] missing from',configfile+'!')
-			quit()
-		# For debugging - keep, may be useful later
-		#else:
-		#	print('['+sect+']['+key+'] exists.')
+			errorExit('['+sect+']['+key+'] missing from '+configfile+'!')
+		else:
+			debug('['+sect+']['+key+'] = '+config[sect][key])
 
 # -----------------------------------------------------------------------------
 
@@ -121,6 +163,8 @@ def testProcessLock(lockfile):
 # -----------------------------------------------------------------------------
 
 def makeMessage(name,files):
+	debug("Name: "+name)
+	debug("Files: "+str(files))
 	# timestamp
 	msg = str(time.time())+"\t"
 	# name
@@ -129,15 +173,19 @@ def makeMessage(name,files):
 	for i in range(len(files)):
 		if not(os.path.isfile(files[i])):
 			msg += "-999.9"
+			debug("File does not exist: "+files[i])
 		elif(os.stat(files[i]).st_size == 0):
 			msg += "-999.9"
+			debug("File size is zero: "+files[i])
 		else:
 			with open(files[i]) as f:
 				val = f.readline()
 			f.close()
+			debug("Value read from file: "+val.strip())
 			msg += val.strip()
 		if i < (len(files) - 1):
 			msg += ','
+	debug("Message constructed: "+msg)
 	return msg
 
 # -----------------------------------------------------------------------------
@@ -149,19 +197,52 @@ def sendMessage(msg):
 	s.setsockopt(SOL_SOCKET,SO_BROADCAST,1)
 	b = bytes(msg,'utf8')
 	s.sendto(b,('<broadcast>',BC_PORT))
+	debug("Broadcast message sent to port: "+str(BC_PORT))
 	return
 
 # -----------------------------------------------------------------------------
 # Main
 # -----------------------------------------------------------------------------
 
-HOME = addSlashToPath(os.environ['HOME'])
+parser = argparse.ArgumentParser("Network measurement value broadcaster")
+parser.add_argument("-v","--version",action="store_true",help="Show version "+
+										"and exit.")
+parser.add_argument("-c","--config",nargs=1,help="Specify alternative "+
+										"configuration file. The default is "+
+										"~/etc/broadcast.conf.")
+parser.add_argument("-d","--debug",action="store_true",help="Turn debugging on")
 
-configfile = HOME + 'etc/broadcast.conf'
+args = parser.parse_args()
 
-if not(os.path.isfile(configfile)):
-	print(configfile,"does not exist.");
-	quit()
+if args.debug:
+	DEBUG = True
+
+versionStr = script+" version "+VERSION+" written by "+AUTHORS
+
+if args.version:
+	print(versionStr)
+	sys.exit(0)
+
+debug(versionStr)
+
+HOME = os.path.expanduser('~')
+if not HOME.endswith('/'):
+	HOME +='/'
+
+debug("Current user's home: "+HOME)
+
+configfile = HOME+"etc/broadcast.conf"
+
+if args.config:
+	debug("Alternate config file specified: "+str(args.config[0]))
+	configfile = str(args.config[0])
+	if not configfile.startswith('/'):
+		configfile = HOME+configfile
+
+debug("Configuration file: "+configfile)
+
+if not os.path.isfile(configfile):
+	errorExit(configfile+' does not exist.')
 
 config = configparser.ConfigParser()
 config.read(configfile)
@@ -183,17 +264,19 @@ parameters = targetlist.split(',')
 
 for target in parameters:
 	targetcheck.append(target+',file')
-	filenames.append(path+target)
+
+checkConfigOptions(config,targetcheck)
+
+for target in parameters:
+	filenames.append(path+config[target]["file"])
 	modtime = getFileModificationTime(filenames[-1])
 	filemodtimes.append(modtime)
 
-checkConfigOptions(config,targetcheck)
 
 lockfile = path + config['main']['lockfile']
 
 if (not createProcessLock(lockfile)):
-	print ("Couldn't create a process lock.")
-	quit()
+	errorExit ("Couldn't create a process lock. Process already running?")
 
 signal.signal(signal.SIGINT, sigHandler)
 signal.signal(signal.SIGTERM, sigHandler)
@@ -223,4 +306,5 @@ while(running):
 			time.sleep(0.1)
 
 removeProcessLock(lockfile)
-quit()
+
+print(script,"done.")

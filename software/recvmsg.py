@@ -22,6 +22,20 @@
 # Start data: 2018-12-12
 # Last modification: 2018-12-12
 
+# Louis Marais
+# Version 2.0
+# Start: 2020-09-23
+# Last modification: 2020-09-23
+#
+# Modifications:
+# ~~~~~~~~~~~~~~
+# 1. Added debugging capability
+# 2. Added some command line switches
+# 3. Added errorExit routine
+#
+#
+#
+
 import os
 import re
 import configparser
@@ -30,6 +44,33 @@ import sys
 import signal
 import time
 import datetime
+import argparse
+
+script = os.path.basename(__file__)
+VERSION = "2.0"
+AUTHORS = "Louis Marais"
+
+DEBUG = False
+
+# -----------------------------------------------------------------------------
+
+def ts():
+	now = datetime.datetime.now()
+	tsStr = now.strftime('%Y-%m-%d %H:%M:%S ')
+	return(tsStr)
+
+# -----------------------------------------------------------------------------
+
+def debug(msg):
+	if DEBUG:
+		print(ts(),msg)
+	return
+
+# -----------------------------------------------------------------------------
+
+def errorExit(s):
+	print('ERROR: '+s)
+	sys.exit(1)
 
 # -----------------------------------------------------------------------------
 
@@ -61,20 +102,18 @@ def checkConfigOptions(config,sectkeys):
 		sect = sectkey[0]
 		key = sectkey[1]
 		if not(checkConfigOption(config,sect,key)):
-			print('['+sect+']['+key+'] missing from',configfile+'!')
-			quit()
-		# For debugging - keep, may be useful later
-		#else:
-		#	print('['+sect+']['+key+'] exists.')
+			debug('['+sect+']['+key+'] missing from '+configfile+'!')
+		else:
+			debug('['+sect+']['+key+'] = '+config[sect][key])
 		return
 
 # -----------------------------------------------------------------------------
 
 def getFileModificationTime(filename):
-	ts = 0
+	tmsmp = 0
 	if os.path.isfile(filename):
-		ts = os.path.getmtime(filename)
-	return ts
+		tmsmp = os.path.getmtime(filename)
+	return tmsmp
 
 # -----------------------------------------------------------------------------
 # adapted from ottplib.py, so that this can be used with kickstart.pl
@@ -104,38 +143,33 @@ def testProcessLock(lockfile):
 
 # -----------------------------------------------------------------------------
 
-def createFile(sectionname,ts,datapath,dataext):
+def createFile(sectionname,tmsmp,datapath,dataext):
 	filetype = 'MJD'
 	if config.has_option(sectionname,'file type'):
-		# For debugging
-		#print("config has option ["+sectionname+"][file type]")
+		debug("config has option ["+sectionname+"][file type] = "+config[sectionname]["file type"])
 		filetype = config[sectionname]['file type']
 	if filetype == "YYYY-MM":
-		fl = datetime.datetime.fromtimestamp(int(ts)).strftime('%Y-%m')
+		fl = datetime.datetime.fromtimestamp(int(tmsmp)).strftime('%Y-%m')
 	elif filetype == "YYYYMM":
-		fl = datetime.datetime.fromtimestamp(int(ts)).strftime('%Y%m')
+		fl = datetime.datetime.fromtimestamp(int(tmsmp)).strftime('%Y%m')
 	elif filetype == "YYYY":
-		fl = datetime.datetime.fromtimestamp(int(ts)).strftime('%Y')
+		fl = datetime.datetime.fromtimestamp(int(tmsmp)).strftime('%Y')
 	else:
-		mjd = int(ts/86400) + 40587
+		mjd = int(tmsmp/86400) + 40587
 		fl = str(mjd)
-	# For debugging
-	#print("filetype:",filetype,"fl:",fl)
+	debug("filetype: "+filetype+" fl: "+fl)
 	flnm = datapath+fl+'.'+dataext
-	# For debugging
-	#print("data file name:",flnm)
+	debug("data file name: "+flnm)
 	return flnm
 
 # -----------------------------------------------------------------------------
 
-def processData(parameters,ts,name,data):
+def processData(parameters,tmsmp,name,data):
 	# extract name and data from msg, check against config and store
-	# For debugging
-	#print("\n\nprocessing message...")
-	#print("timestamp:",ts)
-	#print("name:",name)
-	#print("data:",data)
-	#print (parameters)
+	debug("Processing message, time stamp "+str(tmsmp))
+	debug("Processing message, name: "+name)
+	debug("Processing message, data: "+data)
+	debug("Processing message, parameters: "+str(parameters))
 	i = 0
 	while config[parameters[i]]['name'] != name:
 		i += 1
@@ -144,8 +178,7 @@ def processData(parameters,ts,name,data):
 				 name+"\nFix up the configurations! Note that local and remote",
 				 "names must match.")
 			return
-	# For debugging
-	#print("Our section is",i,"with section name",parameters[i])
+	debug("Our section is "+str(i)+" with section name "+parameters[i])
 	header = config[parameters[i]]['data']
 	datapath = config[parameters[i]]['path']
 	datapath = addSlashToPath(datapath)
@@ -155,18 +188,17 @@ def processData(parameters,ts,name,data):
 		print("The datapath ("+datapath+") for name =",name,"does not exist.")
 		return
 	dataext = config[parameters[i]]['file extension']
-	# For debugging
-	#print("header:",header)
-	#print("datapath:",datapath)
-	#print("data ext:",dataext)
-	flnm = createFile(parameters[i],float(ts),datapath,dataext)
+	debug("header: "+header)
+	debug("datapath: "+datapath)
+	debug("data ext: "+dataext)
+	flnm = createFile(parameters[i],float(tmsmp),datapath,dataext)
+	debug("File name: "+flnm)
 	if not(os.path.isfile(flnm)):
 		f = open(flnm,'w')
 		f.write('Timestamp\t'+header+'\n')
 		f.close()
-	tsStr = "%0.6f" % (float(ts)/86400 + 40587)
-	# For debugging
-	#print("ts:",ts,"tsStr:",tsStr)
+	tsStr = "%0.6f" % (float(tmsmp)/86400 + 40587)
+	debug("tmsmp: "+str(tmsmp)+" tsStr: "+tsStr)
 	f = open(flnm,'a')
 	f.write(tsStr+'\t'+data+'\n')
 	f.close()
@@ -184,13 +216,45 @@ def writeAddr(flnm,addr):
 #   Main
 # -----------------------------------------------------------------------------
 
-HOME = addSlashToPath(os.environ['HOME'])
+parser = argparse.ArgumentParser("Network measurement value receiver")
+parser.add_argument("-v","--version",action="store_true",help="Show version "+
+										"and exit.")
+parser.add_argument("-c","--config",nargs=1,help="Specify alternative "+
+										"configuration file. The default is "+
+										"~/etc/recvmsg.conf.")
+parser.add_argument("-d","--debug",action="store_true",help="Turn debugging on")
 
-configfile = HOME + 'etc/recvmsg.conf'
+args = parser.parse_args()
 
-if not(os.path.isfile(configfile)):
-	print(configfile,"does not exist.");
-	quit()
+if args.debug:
+	DEBUG = True
+
+versionStr = script+" version "+VERSION+" written by "+AUTHORS
+
+if args.version:
+	print(versionStr)
+	sys.exit(0)
+
+debug(versionStr)
+
+HOME = os.path.expanduser('~')
+if not HOME.endswith('/'):
+	HOME +='/'
+
+debug("Current user's home: "+HOME)
+
+configfile = HOME+"etc/recvmsg.conf"
+
+if args.config:
+	debug("Alternate config file specified: "+str(args.config[0]))
+	configfile = str(args.config[0])
+	if not configfile.startswith('/'):
+		configfile = HOME+configfile
+
+debug("Configuration file: "+configfile)
+
+if not os.path.isfile(configfile):
+	errorExit(configfile+' does not exist.')
 
 config = configparser.ConfigParser()
 config.read(configfile)
@@ -220,20 +284,18 @@ for name in parameters:
 
 checklist = msgnames + msgdata + msgpaths + msgfileexts + msgfiletypes
 
-# For debugging
-#print("names:",msgnames)
-#print("data:",msgdata)
-#print("paths:",msgpaths)
-#print("file ext:",msgfileexts)
-#print("checklist:",checklist)
+debug("names: "+str(msgnames))
+debug("data: "+str(msgdata))
+debug("paths: "+str(msgpaths))
+debug("file ext: "+str(msgfileexts))
+debug("checklist: "+str(checklist))
 
 checkConfigOptions(config,checklist)
 
 lockfile = lockpath + config['main']['lockfile']
 
 if (not createProcessLock(lockfile)):
-	print ("Couldn't create a process lock.")
-	quit()
+	errorExit ("Couldn't create a process lock. Process already running?")
 
 signal.signal(signal.SIGINT, sigHandler)
 signal.signal(signal.SIGTERM, sigHandler)
@@ -257,41 +319,38 @@ while running:
 	else:
 		addr = a[0]
 		data = m.decode()
-		# For debugging
-		#print("addr:",addr)
-		#print("data:",m.decode())
+		debug("addr: "+addr)
+		debug("data: "+m.decode())
 		dataparts = data.split('\t')
 		if(len(dataparts) == 3):
-			ts = dataparts[0]
+			tmsmp = dataparts[0]
 			name = dataparts[1]
 			measurements = dataparts[2]
-			# For debugging
-			#print("time:",ts)
-			#print("name:",name)
-			#rint("meas:",measurements)
-			if(rcvtime != ts):
-				# For debugging
-				#print("\nUnique message received. Processing.\n")
-				processData(parameters,ts,name,measurements)
-				rcvtime = ts
+			debug("time: "+tmsmp)
+			debug("name: "+name)
+			debug("meas: "+measurements)
+			if(rcvtime != tmsmp):
+				debug("Unique message received. Processing.")
+				processData(parameters,tmsmp,name,measurements)
+				rcvtime = tmsmp
 				# Check address
-				# For debugging
-				#print("Checking address")
+				debug("Checking address")
 				flnm = '/tmp/'+name+'.addr'
 				if os.path.isfile(flnm):
 					f = open(flnm,'r')
 					chkaddr = f.readline().strip()
 					f.close()
-					# For debugging
-					#print("   addr:",addr)
-					#print("chkaddr:",chkaddr)
+					debug("   addr: "+addr)
+					debug("chkaddr: "+chkaddr)
 					if addr != chkaddr:
-						# For debugging
-						#print("Addresses do not match, overwriting wrong address")
+						debug("Addresses do not match, overwriting wrong address")
 						writeAddr(flnm,addr)
 				else:
-					# For debugging
-					#print("Creating address file")
+					debug("Creating address file")
 					writeAddr(flnm,addr)
-	
+			else:
+				debug("Message with duplicate timestamp received.")
+
 removeProcessLock(lockfile)
+
+print(script,"done.")
