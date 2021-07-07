@@ -1,27 +1,10 @@
 #!/bin/bash
 
-cd threadedServer
-echo "Building clientTest"
-g++ -Wall clientTest.cpp network/SocketClient.cpp -o clientTest -pthread
-echo "Building server"
-g++ -Wall server.cpp network/SocketServer.cpp network/ConnectionHandler.cpp -o server -pthread
-echo "Copying clientTest and server to ${HOME}/bin"
-cp clientTest ${HOME}/bin/
-# Note the name change - 'server' is too generic.
-cp server ${HOME}/bin/gasmeterserver
-
-cd ..
-echo "Building countpulses"
-gcc -Wall countpulses.c -o countpulses -lwiringPi
-echo "Building gasmeter"
-gcc -Wall gasmeter.c -o gasmeter -lwiringPi -lwiringPiDev -lrt
-echo "Building intensity"
-gcc -Wall intensity.c -o intensity -lwiringPi
-
 echo "Copying countpulses, gasmeter and intensity to ${HOME}/bin/"
-cp countpulses ${HOME}/bin/
-cp gasmeter ${HOME}/bin/
+cp countpulses.py ${HOME}/bin/
+cp gasmeter.py ${HOME}/bin/
 cp intensity ${HOME}/bin/
 
-echo "Copying broadcast.py to ${HOME}/bin"
+echo "Copying broadcast and rcvmsg to ${HOME}/bin"
 cp broadcast.py ${HOME}/bin/
+cp recvmsg.py ${HOME}/bin/
