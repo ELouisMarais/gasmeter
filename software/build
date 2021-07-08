@@ -1,5 +1,8 @@
 #!/bin/bash
 
+echo "Building intensity"
+gcc -Wall intensity.c -o intensity -lwiringPi
+
 echo "Copying countpulses, gasmeter and intensity to ${HOME}/bin/"
 cp countpulses.py ${HOME}/bin/
 cp gasmeter.py ${HOME}/bin/

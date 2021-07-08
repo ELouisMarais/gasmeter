@@ -5,25 +5,32 @@
 # to be picked up by a server that will process it according to its own desires
 #
 # Message structure is strictly according to the one stated here, and fields 
-# are TAB delimited.
+# are TAB delimited:
+#
+#    Sender name {TAB} Parameters
+#
 # Values for the fields are read from a config file.
 #
 # Field            Description
 # ~~~~~~~~~~~~~  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Sender name    Free field, for example ENVLOGGER GASMETER_G200_1 RASPI_01 or 
-#                whatever. The message reader application (recvmsg.py) acts on
-#                the message depending on its sender name. The reader 
+# Sender name    Free field, for example ENVLOGGER | GASMETER_G200_1 | RASPI_01 
+#                or whatever. The message reader application (recvmsg.py) acts
+#                on the message depending on its sender name. The reader 
 #                application has a config file that tells it what to do.
 # Parameters     First parameter, ... , last parameter
 
-# Louis Marais
-# Version 1.0
-# Start data: 2018-09-18
+# -----------------------------------------------------------------------------
+#
+# Author(s)        : Louis Marais
+# Version          : 1.0
+# Start data       : 2018-09-18
 # Last modification: 2018-12-12
-
-# Louis Marais
-# Version 2.0
-# Start: 2020-09-23
+#
+# -----------------------------------------------------------------------------
+#
+# Author(s)        : Louis Marais
+# Version          : 2.0
+# Start            : 2020-09-23
 # Last modification: 2020-09-23
 #
 # Modifications:
@@ -34,8 +41,35 @@
 # 4. fixed old bug in code where the file being checked was path/target
 #    instead of path/[target][file]
 #
+# -----------------------------------------------------------------------------
 #
+# Author(s)        : Louis Marais
+# Version          : 2.1
+# Start            : 2021-07-08
+# Last modification: 2021-07-09
 #
+# Modifications:
+# ~~~~~~~~~~~~~~
+# 1. Added ability to save lock file in any location. This was added because 
+#    for the OpenTTP we use a RAMdisk (tmp filesystem) to store often 
+#    rewritten files, and I wanted to use that space for the lock file. For
+#    previous versions the lock file was saved to the path specified in
+#    [main][path] of the configuration file. I retained backwards
+#    compatibility.
+# 2. Made some formatting changes.
+# 3. Removed unused code.
+#
+# -----------------------------------------------------------------------------
+#
+# Author(s)        : 
+# Version          : {Next}
+# Start            : 
+# Last modification: 
+#
+# Modifications:
+# ~~~~~~~~~~~~~~
+#
+# -----------------------------------------------------------------------------
 
 import sys
 import time
@@ -49,65 +83,48 @@ import datetime
 import argparse
 
 script = os.path.basename(__file__)
-VERSION = "2.0"
+VERSION = "2.1"
 AUTHORS = "Louis Marais"
 
+versionStr = script+" version "+VERSION+" written by "+AUTHORS
 DEBUG = False
 
 # -----------------------------------------------------------------------------
-
 def ts():
 	now = datetime.datetime.now()
 	tsStr = now.strftime('%Y-%m-%d %H:%M:%S ')
 	return(tsStr)
 
 # -----------------------------------------------------------------------------
+def utcts():
+	now = datetime.datetime.utcnow()
+	tsStr = now.strftime('%d/%m/%y %H:%M:%S')
+	return(tsStr)
 
+# -----------------------------------------------------------------------------
 def debug(msg):
 	if DEBUG:
 		print(ts(),msg)
 	return
 
 # -----------------------------------------------------------------------------
-
 def errorExit(s):
 	print('ERROR: '+s)
 	sys.exit(1)
 
 # -----------------------------------------------------------------------------
-
 def sigHandler(sig,frame):
 	global running
 	running = False
 	return
 
 # -----------------------------------------------------------------------------
-
-# No longer used - I decided not to send the IP to the reader application.
-# Keep for future use / historical interest.
-# I also discovered that the IP address is sent with the broadcast message 
-# anyway - rather logical because the receiver will need to know who bradcast
-# the message... Am I an idiot or what?
-def getIP():
-	ipaddr = subprocess.check_output(["hostname","-I"])
-	# For BBB 'hostname -I' returns: b'10.149.169.21 192.168.7.2 192.168.6.2 \n'
-	# We want to get the first address. The other two are for the USB network devices
-	m = re.match(r'(\d+\.\d+\.\d+\.\d+)',ipaddr.decode())
-	if m != None:
-		ipaddr = m.group(1)
-	else:
-		ipaddr = "0.0.0.0"
-	return ipaddr
-
-# -----------------------------------------------------------------------------
-
 def addSlashToPath(path):
-	path = re.sub(r'/$','',path) # strip off last '/' if any, then add it
-	path = path+'/'              # so we can be sure the path is correct
+	if not path.endswith('/'):
+		path += '/'
 	return path
 
 # -----------------------------------------------------------------------------
-
 def checkConfigOption(config,section,key):
 	if config.has_option(section,key):
 		return True
@@ -115,7 +132,6 @@ def checkConfigOption(config,section,key):
 		return False
 
 # -----------------------------------------------------------------------------
-
 def checkConfigOptions(config,sectkeys):
 	for pair in sectkeys:
 		sectkey = pair.split(",")
@@ -127,7 +143,18 @@ def checkConfigOptions(config,sectkeys):
 			debug('['+sect+']['+key+'] = '+config[sect][key])
 
 # -----------------------------------------------------------------------------
+# Special - if flnm contains a path, create the lock file name relative to 
+# that path, either absolute or relative to HOME, otherwise just combine the 
+# provided path with the file name (to retain backwards compatibility).
+def lockfilename(path,flnm):
+	if not '/' in flnm:
+		return(path+flnm)
+	elif flnm.startswith('/'):
+		return(flnm)
+	else:
+		return(HOME+flnm)
 
+# -----------------------------------------------------------------------------
 def getFileModificationTime(filename):
 	ts = 0
 	if os.path.isfile(filename):
@@ -161,7 +188,6 @@ def testProcessLock(lockfile):
 	return True
 
 # -----------------------------------------------------------------------------
-
 def makeMessage(name,files):
 	debug("Name: "+name)
 	debug("Files: "+str(files))
@@ -189,7 +215,6 @@ def makeMessage(name,files):
 	return msg
 
 # -----------------------------------------------------------------------------
-
 def sendMessage(msg):
 	BC_PORT = 12345
 	s = socket(AF_INET,SOCK_DGRAM)
@@ -205,8 +230,7 @@ def sendMessage(msg):
 # -----------------------------------------------------------------------------
 
 parser = argparse.ArgumentParser("Network measurement value broadcaster")
-parser.add_argument("-v","--version",action="store_true",help="Show version "+
-										"and exit.")
+parser.add_argument('-v','--version',action='version', version = versionStr)
 parser.add_argument("-c","--config",nargs=1,help="Specify alternative "+
 										"configuration file. The default is "+
 										"~/etc/broadcast.conf.")
@@ -217,17 +241,9 @@ args = parser.parse_args()
 if args.debug:
 	DEBUG = True
 
-versionStr = script+" version "+VERSION+" written by "+AUTHORS
-
-if args.version:
-	print(versionStr)
-	sys.exit(0)
-
 debug(versionStr)
 
-HOME = os.path.expanduser('~')
-if not HOME.endswith('/'):
-	HOME +='/'
+HOME = addSlashToPath(os.path.expanduser('~'))
 
 debug("Current user's home: "+HOME)
 
@@ -272,8 +288,9 @@ for target in parameters:
 	modtime = getFileModificationTime(filenames[-1])
 	filemodtimes.append(modtime)
 
+lockfile = lockfilename(path,config['main']['lockfile'])
 
-lockfile = path + config['main']['lockfile']
+debug("Lock file: {}".format(lockfile))
 
 if (not createProcessLock(lockfile)):
 	errorExit ("Couldn't create a process lock. Process already running?")
@@ -307,4 +324,4 @@ while(running):
 
 removeProcessLock(lockfile)
 
-print(script,"done.")
+print(utcts(),script,"done.")
