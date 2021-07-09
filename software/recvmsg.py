@@ -17,14 +17,18 @@
 # Configuration file: ~/etc/recvmsg.conf
 #
 
-# Louis Marais
-# Version 1.0
-# Start data: 2018-12-12
+# -----------------------------------------------------------------------------
+#
+# Author(s)        : Louis Marais
+# Version          : 1.0
+# Start data       : 2018-12-12
 # Last modification: 2018-12-12
-
-# Louis Marais
-# Version 2.0
-# Start: 2020-09-23
+#
+# -----------------------------------------------------------------------------
+#
+# Author(s)        : Louis Marais
+# Version          : 2.0
+# Start            : 2020-09-23
 # Last modification: 2020-09-23
 #
 # Modifications:
@@ -33,11 +37,46 @@
 # 2. Added some command line switches
 # 3. Added errorExit routine
 #
+# -----------------------------------------------------------------------------
 #
+# Author(s)        : Louis Marais
+# Version          : 2.1
+# Start            : 2021-07-09
+# Last modification: 202
 #
+# Modifications:
+# ~~~~~~~~~~~~~~
+# 1. Formatting changes (styles change!)
+# 2. Added utcts() to create a time stamp in the same format as used by the
+#    kick start subsystem (when the software terminates, a message gets saved
+#    in the log, and haveing a different format timestamp is confusing).
+# 3. Simplified addSlashToPath routine.
+# 4. Removed code requiring 're' (regular expressions) - replaced with native
+#    Python bits.
+# 5. Temporary directory for storing sender IP addess now in a more logical
+#    place.
+# 6. I found that with a network where many devices broadcast messages on the
+#    selected port, there are instances when multiple messages are received at
+#    the same time, meaning that the current process to detect duplicates is
+#    no longer effective. This means that the data files end up with many 
+#    duplicate entries. I've dealt with this problem by filtering them out
+#    when I analyse the data, but avoiding the issue would be better. I'm
+#    fixing that now.
+#
+# -----------------------------------------------------------------------------
+#
+# Author(s)        : 
+# Version          : {Next}
+# Start            : 
+# Last modification: 
+#
+# Modifications:
+# ~~~~~~~~~~~~~~
+# 1.
+#
+# -----------------------------------------------------------------------------
 
 import os
-import re
 import configparser
 import socket
 import sys
@@ -47,47 +86,47 @@ import datetime
 import argparse
 
 script = os.path.basename(__file__)
-VERSION = "2.0"
+VERSION = "2.1"
 AUTHORS = "Louis Marais"
 
 DEBUG = False
 
 # -----------------------------------------------------------------------------
-
 def ts():
 	now = datetime.datetime.now()
 	tsStr = now.strftime('%Y-%m-%d %H:%M:%S ')
 	return(tsStr)
 
 # -----------------------------------------------------------------------------
+def utcts():
+	now = datetime.datetime.utcnow()
+	tsStr = now.strftime('%d/%m/%y %H:%M:%S')
+	return(tsStr)
 
+# -----------------------------------------------------------------------------
 def debug(msg):
 	if DEBUG:
 		print(ts(),msg)
 	return
 
 # -----------------------------------------------------------------------------
-
 def errorExit(s):
 	print('ERROR: '+s)
 	sys.exit(1)
 
 # -----------------------------------------------------------------------------
-
 def sigHandler(sig,frame):
 	global running
 	running = False
 	return
 
 # -----------------------------------------------------------------------------
-
 def addSlashToPath(path):
-	path = re.sub(r'/$','',path) # strip off last '/' if any, then add it
-	path = path+'/'              # so we can be sure the path is correct
+	if not path.endswith('/'):
+		path += '/'
 	return path
 
 # -----------------------------------------------------------------------------
-
 def checkConfigOption(config,section,key):
 	if config.has_option(section,key):
 		return True
@@ -95,7 +134,6 @@ def checkConfigOption(config,section,key):
 		return False
 
 # -----------------------------------------------------------------------------
-
 def checkConfigOptions(config,sectkeys):
 	for pair in sectkeys:
 		sectkey = pair.split(",")
@@ -108,7 +146,6 @@ def checkConfigOptions(config,sectkeys):
 		return
 
 # -----------------------------------------------------------------------------
-
 def getFileModificationTime(filename):
 	tmsmp = 0
 	if os.path.isfile(filename):
@@ -142,7 +179,6 @@ def testProcessLock(lockfile):
 	return True
 
 # -----------------------------------------------------------------------------
-
 def createFile(sectionname,tmsmp,datapath,dataext):
 	filetype = 'MJD'
 	if config.has_option(sectionname,'file type'):
@@ -163,7 +199,6 @@ def createFile(sectionname,tmsmp,datapath,dataext):
 	return flnm
 
 # -----------------------------------------------------------------------------
-
 def processData(parameters,tmsmp,name,data):
 	# extract name and data from msg, check against config and store
 	debug("Processing message, time stamp "+str(tmsmp))
@@ -174,18 +209,18 @@ def processData(parameters,tmsmp,name,data):
 	while config[parameters[i]]['name'] != name:
 		i += 1
 		if i >= len(parameters):
-			print("parameters[i]['name'] not found! We were looking for name ==",
-				 name+"\nFix up the configurations! Note that local and remote",
+			debug("parameters[i]['name'] not found! We were looking for name == "+
+				 name+". Fix up the configurations! Note that local and remote "+
 				 "names must match.")
 			return
 	debug("Our section is "+str(i)+" with section name "+parameters[i])
 	header = config[parameters[i]]['data']
 	datapath = config[parameters[i]]['path']
 	datapath = addSlashToPath(datapath)
-	if not(re.match(r'^/',datapath)):
+	if not(datapath.startswith('/')):
 		datapath = HOME+datapath
 	if not(os.path.isdir(datapath)):
-		print("The datapath ("+datapath+") for name =",name,"does not exist.")
+		debug("The datapath ("+datapath+") for name = "+name+" does not exist.")
 		return
 	dataext = config[parameters[i]]['file extension']
 	debug("header: "+header)
@@ -205,7 +240,6 @@ def processData(parameters,tmsmp,name,data):
 	return
 
 # -----------------------------------------------------------------------------
-
 def writeAddr(flnm,addr):
 	f = open(flnm,'w')
 	f.write(addr)
@@ -264,7 +298,7 @@ checkConfigOptions(config,['main,targets','main,lockfile','main,lock path'])
 
 targetlist = config['main']['targets']
 lockpath = addSlashToPath(config['main']['lock path'])
-if not(re.match(r'^/',lockpath)):
+if not(lockpath.startswith('/')):
 	lockpath = HOME+lockpath
 
 # Make sure each of the targets has a section in the configuration file
@@ -292,6 +326,18 @@ debug("checklist: "+str(checklist))
 
 checkConfigOptions(config,checklist)
 
+# find a suitable temporary path for storing sender's IP addresses
+# Try expected locations from least likely
+temppath = HOME+'lockStatusCheck/'
+if not (os.path.isdir(temppath)):
+	temppath = HOME+'status/'
+	if not (os.path.isdir(temppath)):
+		temppath = HOME+'tmp/'
+		if not (os.path.isdir(temppath)):
+			temppath = '/tmp/'
+
+debug('Temporary path: {}'.format(temppath))
+
 lockfile = lockpath + config['main']['lockfile']
 
 if (not createProcessLock(lockfile)):
@@ -310,6 +356,7 @@ m = ''
 addr = ''
 data = ""
 rcvtime = ""
+msgs = []
 while running:
 	try:
 		time.sleep(0.05)
@@ -329,13 +376,14 @@ while running:
 			debug("time: "+tmsmp)
 			debug("name: "+name)
 			debug("meas: "+measurements)
-			if(rcvtime != tmsmp):
+			if not data in msgs:
 				debug("Unique message received. Processing.")
 				processData(parameters,tmsmp,name,measurements)
 				rcvtime = tmsmp
+				msgs.append(data)
 				# Check address
 				debug("Checking address")
-				flnm = '/tmp/'+name+'.addr'
+				flnm = temppath+name+'.addr'
 				if os.path.isfile(flnm):
 					f = open(flnm,'r')
 					chkaddr = f.readline().strip()
@@ -350,7 +398,9 @@ while running:
 					writeAddr(flnm,addr)
 			else:
 				debug("Message with duplicate timestamp received.")
+		if len(msgs) > 25: # <----------------------- Increase this if you have
+			msgs.pop(0)      #                          duplicates in your data files
 
 removeProcessLock(lockfile)
 
-print(script,"done.")
+print(utcts(),script,"done.")
