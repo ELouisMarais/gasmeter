@@ -89,6 +89,8 @@ script = os.path.basename(__file__)
 VERSION = "2.1"
 AUTHORS = "Louis Marais"
 
+versionStr = script+" version "+VERSION+" written by "+AUTHORS
+
 DEBUG = False
 
 # -----------------------------------------------------------------------------
@@ -250,9 +252,8 @@ def writeAddr(flnm,addr):
 #   Main
 # -----------------------------------------------------------------------------
 
-parser = argparse.ArgumentParser("Network measurement value receiver")
-parser.add_argument("-v","--version",action="store_true",help="Show version "+
-										"and exit.")
+parser = argparse.ArgumentParser(description="Network measurement value receiver")
+parser.add_argument('-v','--version',action='version', version = versionStr)
 parser.add_argument("-c","--config",nargs=1,help="Specify alternative "+
 										"configuration file. The default is "+
 										"~/etc/recvmsg.conf.")
@@ -262,12 +263,6 @@ args = parser.parse_args()
 
 if args.debug:
 	DEBUG = True
-
-versionStr = script+" version "+VERSION+" written by "+AUTHORS
-
-if args.version:
-	print(versionStr)
-	sys.exit(0)
 
 debug(versionStr)
 

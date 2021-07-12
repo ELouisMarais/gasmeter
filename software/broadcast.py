@@ -87,6 +87,7 @@ VERSION = "2.1"
 AUTHORS = "Louis Marais"
 
 versionStr = script+" version "+VERSION+" written by "+AUTHORS
+
 DEBUG = False
 
 # -----------------------------------------------------------------------------
@@ -229,7 +230,7 @@ def sendMessage(msg):
 # Main
 # -----------------------------------------------------------------------------
 
-parser = argparse.ArgumentParser("Network measurement value broadcaster")
+parser = argparse.ArgumentParser(description="Network measurement value broadcaster")
 parser.add_argument('-v','--version',action='version', version = versionStr)
 parser.add_argument("-c","--config",nargs=1,help="Specify alternative "+
 										"configuration file. The default is "+
