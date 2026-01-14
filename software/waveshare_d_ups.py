@@ -575,6 +575,7 @@ checkbattery = time.time()
 
 while running:
 	if time.time() > nexttime:
+		nexttime = time.time() + logint  # Precautionary: Time may not be synced when app starts!
 		bus_voltage = ina219.getBusVoltage_V()              # voltage on V- (load side)
 		shunt_voltage = ina219.getShuntVoltage_mV() / 1000  # voltage between V+ and V- across the shunt
 		psu_voltage = bus_voltage + shunt_voltage           # INA219 measure bus voltage on the load side.
@@ -597,9 +598,9 @@ while running:
 		savedata(datapath,ext,msg,current_user,configured_user)
 		savestatus(statusfile,msg,current_user,configured_user)
 		
-		nexttime += logint
 	
 	if time.time() > checkbattery:
+		checkbattery = time.time() + 2  # Precautionary: Time may not be synced when app starts!
 		if(bus_voltage < 3.15) and (current < 0.050): # Minimum charge current: 50 mA
 			low += 1
 			if(low >= 30): # shut down when battery low for more than a minute
@@ -618,7 +619,6 @@ while running:
 		else:
 			low = 0
 		# Check the battery every 2 seconds
-		checkbattery += 2
 	
 	time.sleep(0.1)
 
