@@ -1,0 +1,1 @@
+*/2 * * * * /usr/local/bin/kickstart.py # See ~/etc/kickstart.conf

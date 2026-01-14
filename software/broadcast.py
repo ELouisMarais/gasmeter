@@ -61,6 +61,18 @@
 #
 # -----------------------------------------------------------------------------
 #
+# Author(s)        : Louis Marais
+# Version          : 2.2
+# Start            : 2026-01-14
+# Last modification: 2026-01-14
+#
+# Modifications:
+# ~~~~~~~~~~~~~~
+# 1. Changed deprecated function datetime.datetime.utcnow() to 
+#    datetime.datetime.now(datetime.UTC)
+#
+# -----------------------------------------------------------------------------
+#
 # Author(s)        : 
 # Version          : {Next}
 # Start            : 
@@ -75,7 +87,7 @@ import sys
 import time
 from socket import *
 import re
-import subprocess
+#import subprocess
 import os
 import configparser
 import signal
@@ -98,7 +110,8 @@ def ts():
 
 # -----------------------------------------------------------------------------
 def utcts():
-	now = datetime.datetime.utcnow()
+	#now = datetime.datetime.utcnow()
+	now = datetime.datetime.now(datetime.UTC)
 	tsStr = now.strftime('%d/%m/%y %H:%M:%S')
 	return(tsStr)
 

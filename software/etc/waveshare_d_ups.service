@@ -1,0 +1,15 @@
+[Unit]
+Description=Manages the UPS subsystem and logs data for UPS parameters
+ConditionPathExists=/usr/local/etc/pi_ups.conf
+ConditionPathExists=/usr/local/sbin/waveshare_d_ups.py
+After = local-fs.target
+
+[Service]
+Restart=always
+StartLimitInterval=120
+StartLimitBurst=5
+RestartSec=20
+ExecStart=/usr/local/sbin/waveshare_d_ups.py -c /usr/local/etc/pi_ups.conf
+
+[Install]
+WantedBy=multi-user.target
