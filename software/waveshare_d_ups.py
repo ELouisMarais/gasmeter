@@ -48,7 +48,7 @@
 # Authors: Louis Marais (and unknown author(s) of INA219.py)
 # Version: 0.1
 # Start date: 2026-01-13
-# Last modifications: 2026-01-14
+# Last modifications: 2026-01-16
 #
 # Initial version. Based very heavily on INA219.py. See 
 # https://www.waveshare.com/wiki/UPS_HAT_(D).
@@ -575,7 +575,6 @@ checkbattery = time.time()
 
 while running:
 	if time.time() > nexttime:
-		nexttime = time.time() + logint  # Precautionary: Time may not be synced when app starts!
 		bus_voltage = ina219.getBusVoltage_V()              # voltage on V- (load side)
 		shunt_voltage = ina219.getShuntVoltage_mV() / 1000  # voltage between V+ and V- across the shunt
 		psu_voltage = bus_voltage + shunt_voltage           # INA219 measure bus voltage on the load side.
@@ -597,6 +596,10 @@ while running:
 		
 		savedata(datapath,ext,msg,current_user,configured_user)
 		savestatus(statusfile,msg,current_user,configured_user)
+		if time.time() > nexttime + logint: # If application starts before time on
+			nexttime = time.time()            # Pi is synchronised, fix it.
+			debug("Large step in time of day observed!")
+		nexttime += logint
 		
 	
 	if time.time() > checkbattery:
@@ -615,10 +618,14 @@ while running:
 					os.popen("i2cset -y 1 0x2d 0x01 0x55")
 				os.system("sudo poweroff")
 			else:
-				debug(f"Voltage Low,please charge in time,otherwise it will shut down in {60-2*low:2d} s")
+				debug(f"Voltage low, please charge in time,otherwise it will shut down in {60-2*low:2d} s")
 		else:
 			low = 0
+		if time.time() > checkbattery + 2: # If application starts before time on
+			checkbattery = time.time()       # Pi is synchronised, fix it.
+			debug("Large step in time of day observed!")
 		# Check the battery every 2 seconds
+		checkbattery +=  2
 	
 	time.sleep(0.1)
 
