@@ -1,0 +1,27 @@
+# This file should live in /usr/lib/systemd/system/
+#
+# Install / enable with:
+#   sudo systemctl enable intensity
+# Start with:
+#   sudo systemctl start intensity
+# Stop with:
+#   sudo systemctl stop intensity
+# Uninstall / disable with:
+#   sudo systemctl disable intensity
+
+
+[Unit]
+# Control the intensity of the backlight of an LCD display
+# intensity is set by a value between 0 and 1024 in the 
+# /home/pi/etc/backlightlevel file.
+Description=Control the intensity of the backlight of an LCD display
+
+[Service]
+# Command to execute when the service is started
+ExecStart=/home/pi/bin/intensity
+# Restart automatically on failure
+Restart=on-failure
+
+[Install]
+# Start at boot time
+WantedBy=default.target
