@@ -13,11 +13,11 @@
 # Waveshare wiki site for the hat: https://www.waveshare.com/wiki/UPS_HAT_(D).
 # There is a README file for the software but no license file or any mention
 # of a license. The README file notes that the software could be an example for
-# someone but I believe this refers to the PyQT5 GUI application.
+# someone but I believe this refers to the PyQt5 GUI application.
 #
 # Given this I believe the code is in the public domain and by mentioning the
-# wiki site above I have made adequately acknowledged the original source. The
-# code below is provided under the MIT license.
+# wiki site above I have adequately acknowledged the original source. The code
+# below is provided under the MIT license.
 
 #
 # The MIT License (MIT)
@@ -48,7 +48,7 @@
 # Authors: Louis Marais (and unknown author(s) of INA219.py)
 # Version: 0.1
 # Start date: 2026-01-13
-# Last modifications: 2026-01-16
+# Last modifications: 2026-01-23
 #
 # Initial version. Based very heavily on INA219.py. See 
 # https://www.waveshare.com/wiki/UPS_HAT_(D).
@@ -455,6 +455,25 @@ def savestatus(fl,dmsg,cuser,fuser):
 	return
 
 # -----------------------------------------------------------------------------
+def savelcdmessage(fl,charge_perc,cur_A,cuser,fuser):
+	 #       12345678901234567890  
+	line1 = "POWER SOURCE: MAINS "
+	if abs(cur_A) > 0.0002:   # Less than about 2 mA is meaningless
+		if cur_A < 0:           # Current flowing from batteries 
+			line1 = "POWER SOURCE: UPS   "
+	line2 = f"BATTERY: {charge_perc:3d}% CHARGE"
+	debug(f"savelcdmessage: line 1 >{line1} <")
+	debug(f"savelcdmessage: line 2 >{line2} <")
+	debug(f"savelcdmessage: Saving LCD message lines to {fl}")
+	with open(fl,'w') as f:
+		f.write(f"{line1}\n")
+		f.write(f"{line2}\n")
+		f.close()
+	if cuser != fuser:
+		changeOwnerAttributes(fl,fuser)
+	return
+
+# -----------------------------------------------------------------------------
 # Main
 # -----------------------------------------------------------------------------
 
@@ -504,7 +523,7 @@ conf = configparser.ConfigParser()
 conf.read(configfile)
 
 req = ['main,user','main,lock file','main,log interval','data,path','data,ext',
-			 'status,path','status,file name']
+			 'status,path','status,file name','status,display file']
 
 cfg = checkConfig(conf, req)
 
@@ -560,7 +579,10 @@ statuspath = makePath(HOME,conf['status']['path'])
 checkPath(statuspath)
 
 statusfile = statuspath + conf['status']['file name']
-debug(f'GPSDO status will be saved to {statusfile}')
+debug(f'UPS status will be saved to {statusfile}')
+
+displayfile = statuspath + conf['status']['display file']
+debug(f'UPS status for LCD display will be saved to {displayfile}')
 
 ina219 = INA219(i2c_bus=1,addr=0x43)
 low = 0
@@ -587,6 +609,17 @@ while running:
 		if(p < 0):
 			p = 0
 		
+		# Recalculate charge percentage. I noticed that the charge percentage gets stuck below 100% when the 
+		# battery is fully charged, but V_BATT is not 4.2 V. I believe this is due to the INA219 accuracy.
+		# So I decided that if the charge percentage is > 95%, and the current is less than 2 mA the battery
+		# is fully charged. An additional check is for battery voltage to be above 4.1 V.
+		
+		if p > 95 and p < 100:
+			if abs(current) < 0.002:
+				if psu_voltage > 4.1:
+					debug(f"Modifying the charge percentage from {p}% to 100%")
+					p = 100
+		
 		#            Battery (V)        Supply (V)        Current (A)    Power (W)   Charge percentage (%)
 		msg = f"{psu_voltage:10.4f} {bus_voltage:10.4f} {current:10.6f} {power:10.6f} {p:8.2f}"
 		
@@ -596,6 +629,7 @@ while running:
 		
 		savedata(datapath,ext,msg,current_user,configured_user)
 		savestatus(statusfile,msg,current_user,configured_user)
+		savelcdmessage(displayfile,p,current,current_user,configured_user)
 		if time.time() > nexttime + logint: # If application starts before time on
 			nexttime = time.time()            # Pi is synchronised, fix it.
 			debug("Large step in time of day observed!")
