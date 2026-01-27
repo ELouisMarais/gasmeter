@@ -48,7 +48,7 @@
 # Authors: Louis Marais (and unknown author(s) of INA219.py)
 # Version: 0.1
 # Start date: 2026-01-13
-# Last modifications: 2026-01-23
+# Last modifications: 2026-01-27
 #
 # Initial version. Based very heavily on INA219.py. See 
 # https://www.waveshare.com/wiki/UPS_HAT_(D).
@@ -461,7 +461,7 @@ def savelcdmessage(fl,charge_perc,cur_A,cuser,fuser):
 	if abs(cur_A) > 0.0002:   # Less than about 2 mA is meaningless
 		if cur_A < 0:           # Current flowing from batteries 
 			line1 = "POWER SOURCE: UPS   "
-	line2 = f"BATTERY: {charge_perc:3d}% CHARGE"
+	line2 = f"BATTERY: {int(charge_perc+0.5):3d}% CHARGE"
 	debug(f"savelcdmessage: line 1 >{line1} <")
 	debug(f"savelcdmessage: line 2 >{line2} <")
 	debug(f"savelcdmessage: Saving LCD message lines to {fl}")
