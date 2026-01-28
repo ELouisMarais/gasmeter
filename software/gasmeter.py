@@ -77,6 +77,36 @@
 #
 # -----------------------------------------------------------------------------
 #
+# Version: 2.0
+# Author: Louis Marais
+# Start date: 2026-01-28
+# Last modification: 2026-01-28
+#
+# Modifications:
+#
+# 1. Fixed up (and modernised) formatting, etc. Removed commented out code.
+# 2. Added UPS option - if a UPS is installed, the UPS messages are shown in
+#    rotation with the IP and room / serial number messages.
+#
+#    Display alternates between these two states:
+#
+#      00000000011111111112                                                      
+#      12345678901234567890                                                      
+#     +--------------------+                                                     
+#   1 |YYYY-MM-DD  HH:MM:SS| Current date and time
+#   2 |  IP: 10.64.39.XXX  | IP address of Pi
+#   3 |B366      NSW32346HP| Room number and serial number of gas meter
+#   4 |     00000.000 m3   | Meter reading in cubic metres
+#     +--------------------+                                                     
+#     +--------------------+                                                     
+#   1 |YYYY-MM-DD  HH:MM:SS| Current date and time                               
+#   2 |POWER SOURCE: MAINS | Power source: Either MAINS or UPS
+#   3 |BATTERY:  54% CHARGE| Battery state
+#   4 |     00000.000 m3   | Meter reading in cubic metres
+#     +--------------------+                                                     
+#
+# -----------------------------------------------------------------------------
+#
 # Version: Next
 # Author: 
 # Start date: 
@@ -98,12 +128,12 @@ import configparser
 import signal
 
 script = os.path.basename(__file__)
-VERSION = "1.0"
+VERSION = "2.0"
 AUTHORS = "Louis Marais"
 
 DEBUG = False
 
-versionStr = script+" version "+VERSION+" written by "+AUTHORS
+versionStr = f"{script} version {VERSION} written by {AUTHORS}"
 
 # -----------------------------------------------------------------------------
 # Setup stuff
@@ -285,7 +315,7 @@ def createAbsPath(path,base):
 
 # -----------------------------------------------------------------------------
 def errorExit(s):
-	print('ERROR: '+s)
+	print(f'ERROR: {s}')
 	sys.exit(1)
 
 # -----------------------------------------------------------------------------
@@ -295,7 +325,7 @@ def sigHandler(sig,frame):
 	return
 
 # -----------------------------------------------------------------------------
-# adapted from ottplib.py, so that this can be used with kickstart.pl
+# adapted from ottplib.py, so that this can be used with kickstart.py
 def createProcessLock(lockfile):
 	if not(testProcessLock(lockfile)):
 		return False
@@ -305,14 +335,14 @@ def createProcessLock(lockfile):
 	return True
 
 # -----------------------------------------------------------------------------
-# adapted from ottplib.py, so that this can be used with kickstart.pl
+# adapted from ottplib.py, so that this can be used with kickstart.py
 def removeProcessLock(lockfile):
 	if(os.path.isfile(lockfile)):
 		os.unlink(lockfile)
 	return
 
 # -----------------------------------------------------------------------------
-# adapted from ottplib.py, so that this can be used with kickstart.pl
+# adapted from ottplib.py, so that this can be used with kickstart.py
 def testProcessLock(lockfile):
 	if(os.path.isfile(lockfile)):
 		flock = open(lockfile,'r')
@@ -332,23 +362,23 @@ def checkConfigOption(config,section,key):
 
 # -----------------------------------------------------------------------------
 def checkConfigOptions(config,sectkeys,configfile):
-	debug('Checking configuration file: {}'.format(configfile))
+	debug(f'checkConfigOptions: Checking configuration file: {configfile}')
 	for pair in sectkeys:
 		sectkey = pair.split(",")
 		sect = sectkey[0].strip()
 		key = sectkey[1].strip()
 		if not(checkConfigOption(config,sect,key)):
-			errorExit('['+sect+']['+key+'] missing from '+configfile+'!')
+			errorExit(f'checkConfigOptions: [{sect}][{key}] missing from {configfile}!')
 		else:
-			debug('[{}][{}] = {}'.format(sect,key,config[sect][key]))
+			debug(f'checkConfigOptions: [{sect}][{key}] = {config[sect][key]}')
 	return
 
 # -----------------------------------------------------------------------------
 def gettime():
 	now = datetime.datetime.now()
-	timeString = now.strftime("%Y-%m-%d  %H:%M:%S")
-	seconds = int(now.strftime("%S"))
-	return(timeString,seconds)
+	timeString = now.strftime("%Y-%m-%d  %H:%M:%S") # Note: formatting differs
+	seconds = int(now.strftime("%S"))               # from that in the 'ts()'
+	return(timeString,seconds)                      # function  
 
 # -----------------------------------------------------------------------------
 def centreString(s,d):
@@ -384,7 +414,8 @@ def getIP():
 def showIP(oldIP):
 	ip = getIP()
 	if ip != oldIP:
-		lcd_string(centreString("IP: {}".format(ip),20),LCD_LINE_2)
+		debug(f"showIP: IP number changed. Old: {oldIP} new: {ip}")
+	lcd_string(centreString(f"IP: {ip}",20),LCD_LINE_2)
 	return (ip)
 
 # -----------------------------------------------------------------------------
@@ -395,7 +426,22 @@ def showRoomAndSN(config):
 	sn = config['main']['serial number']
 	if len(sn) > 10:
 		sn = sn[0:10]
-	lcd_string("{:<10}{:>10}".format(roomno,sn),LCD_LINE_3)
+	lcd_string(f"{roomno:<10}{sn:>10}",LCD_LINE_3)
+	return
+
+# -----------------------------------------------------------------------------
+def showUPSstatus(fl):
+	if not os.path.isfile(fl):
+		debug(f"showUPSstatus: {fl} does not exist, so nothing to do.")
+		return
+	with open(fl,'r') as f:
+		lines = f.readlines()
+		f.close()
+	if not len(lines) == 2:
+		debug(f"showUPSstatus: {fl} has {len(lines)} lines; 2 expected.")
+		return
+	lcd_string(lines[0],LCD_LINE_2)
+	lcd_string(lines[1],LCD_LINE_3)
 	return
 
 # -----------------------------------------------------------------------------
@@ -403,14 +449,14 @@ def getVolume(flnm):
 	with open (flnm,'r') as f:
 		v = f.readline().strip()
 		f.close()
-	debug('value from {}: {}'.format(flnm,v))
+	debug(f'getVolume: Value from {flnm}: {v}')
 	return(v)
 
 # -----------------------------------------------------------------------------
 def showGasVolume(flnm,oldVolume):
 	volume = getVolume(flnm)
 	if volume != oldVolume:
-		lcd_string("{:14.2f}x m\0  ".format(float(volume)),LCD_LINE_4)
+		lcd_string(f"{float(volume):14.2f}x m\0  ",LCD_LINE_4)
 	return (volume)
 
 # -----------------------------------------------------------------------------
@@ -421,37 +467,61 @@ def getFileTime(flnm):
 # -----------------------------------------------------------------------------
 def mjd():
 	MJD = int(time.time()/86400) + 40587
-	debug("Today's MJD: {}".format(MJD))
+	debug(f"mjd: Today's MJD: {MJD}")
 	return(MJD)
 
-"""
 # -----------------------------------------------------------------------------
-def createFileName(fileformat):
-	if fileformat == 'YYYY':
-		flnm = datetime.datetime.now().strftime('%Y')+'.dat'
-	elif fileformat == 'YYYY-MM':
-		flnm = datetime.datetime.now().strftime('%Y-%m')+'.dat'
+def getUPSdisplayFilename(config):
+	fl = ""
+	if config.has_option('main','ups config file'):
+		upsconfigfile = config['main']['ups config file']
+		if not upsconfigfile.startswith('/'):
+			upsconfigfile = HOME + upsconfigfile
+		debug(f"getUPSdisplayFilename: UPS config file is {upsconfigfile}")
+		upsconfig = configparser.ConfigParser()
+		upsconfig.read(upsconfigfile)
+		if upsconfig.has_option('status','path'):
+			pth = upsconfig['status']['path']
+			if not pth.startswith('/'):
+				pth = HOME + pth
+				if not pth.endswith('/'):
+					pth += '/'
+				if upsconfig.has_option('status','display file'):
+					fl = pth + upsconfig['status']['display file']
+					debug(f"getUPSdisplayFilename: File name is {fl}")
 	else:
-		flnm = str(mjd())+'.dat'
-	debug('File format: {}, file name: {}'.format(fileformat,flnm))
-	return(flnm)
+		debug("getUPSdisplayFilename: No entry for '[main] ups config file'")
+	return(fl)
 
 # -----------------------------------------------------------------------------
-def msts():
-	mstsStr = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-	return(mstsStr)
-
-# -----------------------------------------------------------------------------
-
-def saveVolume(filepath,fileformat,vol):
-	flnm = filepath + createFileName(fileformat)
-	s = '{} {:.2f}\n'.format(msts(),float(vol))
-	with open(flnm,'a') as f:
-		f.write(s)
-		f.close()
-	debug('Wrote "{}" to: {}'.format(s.strip(),flnm))
-	return
-"""
+def getUPSoptions(config):
+	ups_installed = False
+	ups_present = config['main']['ups installed']
+	if ups_present == '1' or ups_present.upper() == 'TRUE':
+		ups_installed = True
+	debug(f"getUPSoptions: Configured value for UPS installed: {ups_installed}")
+	ups_fl = ""
+	if ups_installed:
+		ups_fl = getUPSdisplayFilename(config)
+	debug(f"getUPSoptions: Configured UPS filename: {ups_fl}")
+	if ups_fl == "":
+		ups_installed = False
+	update_interval = 10
+	if config.has_option('main','rotate display'):
+		try:
+			s = config['main']['rotate display']
+			update_interval = int(s)
+		except:
+			errorExit("getUPSoptions: Invalid value configured for update "+
+						 f"interval: {s}. The value must be an integer between 5 and 60 "+
+						 "(seconds).")
+		debug(f"getUPSoptions: configured update interval: {update_interval} s")
+		if update_interval < 5 or update_interval > 60:
+			debug("getUPSoptions: Valid update intervals are between 5 and 60 "+
+				 f"seconds. The configured value ({update_interval} s) falls outside "+
+				 "these limits. The value will be set to the default (10 s).")
+			update_interval = 10
+	return(ups_installed,ups_fl,update_interval)
 
 # -----------------------------------------------------------------------------
 # Main
@@ -473,15 +543,15 @@ if args.debug:
 debug(versionStr)
 
 HOME = addSlashToPath(os.environ['HOME'])
-debug("Current user's HOME: {}".format(HOME))
+debug(f"Current user's HOME: {HOME}")
 
-configfile = HOME + 'etc/gasmeter.conf'
+configfile = f'{HOME}etc/gasmeter.conf'
 if args.c:
 	configfile = args.c[0]
-debug('Configuration file: {}'.format(configfile))
+debug(f'Configuration file: {configfile}')
 
 if not os.path.isfile(configfile):
-	errorExit('Configuration file does not exist: {}'.format(configfile))
+	errorExit(f'Configuration file does not exist: {configfile}')
 
 config = configparser.ConfigParser()
 config.read(configfile)
@@ -491,9 +561,29 @@ checkConfigOptions(config,['main,room no','main,serial number',
 													 'main,meter reading file','main,lock file'],
 													 configfile)
 
+debug(f"Configured room number: {config['main']['room no']}")
+debug(f"Configured meter serial number: {config['main']['serial number']}")
+
 readingflnm = createAbsFilename(config['main']['meter reading file'],HOME)
-#datapath = createAbsPath(config['main']['data path'],HOME)
-#fileformat = config['main']['file format']
+debug(f"Configured meter reading file: {readingflnm}")
+
+lockfile = HOME + config['main']['lock file']
+debug(f"Configured lock file: {lockfile}")
+
+ups = False
+ups_flnm = ""
+ups_update = 10
+
+if config.has_option('main','ups installed'):
+	ups,ups_flnm,ups_update = getUPSoptions(config)
+
+debug(f"UPS installed: {ups}")
+if ups:
+	debug(f"UPS messages file: {ups_flnm}")
+	debug(f"UPS messages update rate: {ups_update} seconds")
+
+if (not createProcessLock(lockfile)):
+        errorExit ("Couldn't create a process lock. Process already running?")
 
 setupLCD()
 lcd_init()
@@ -508,19 +598,15 @@ showRoomAndSN(config)
 oldVolume = showGasVolume(readingflnm,'')
 oldft = os.path.getmtime(readingflnm)
 
-lockfile = HOME + config['main']['lock file']
-
-if (not createProcessLock(lockfile)):
-        errorExit ("Couldn't create a process lock. Process already running?")
-
 signal.signal(signal.SIGINT, sigHandler)
 signal.signal(signal.SIGTERM, sigHandler)
 
 prevSec = -1
 running = True
 count = 0
-#updated = -1
 CHECK_TIME = 3600 # seconds
+ups_time = time.time()
+ups_cycle = False
 
 while running:
 	# Update the time regularly
@@ -529,22 +615,33 @@ while running:
 	# Check the meter reading regularly
 	ft = os.path.getmtime(readingflnm)
 	if ft != oldft:
-		debug('Volume has been updated! Old vol: {}'.format(oldVolume))
+		debug(f'Volume has been updated! Old vol: {oldVolume}')
 		oldVolume = showGasVolume(readingflnm,oldVolume)
-		debug('Volume has been updated! New vol: {}'.format(oldVolume))
-		#saveVolume(datapath,fileformat,oldVolume)
+		debug(f'Volume has been updated! New vol: {oldVolume}')
 		oldft = ft
-		#updated = time.time()
+	
 	# Note: The volume is saved to file at least once an hour. This is 
-	# accomplished by the countpulses software updating the file date of that
+	# done by the countpulses software updating the file date of that
 	# file at least once an hour.
 	
-	# Check IP approximately every hour
-	if count >= 5 * CHECK_TIME:
-		ip = showIP(oldIP)
-		debug('Checking IP! count: {}, oldIP: {}, ip: {}'.format(count,oldIP,ip))
-		count = -1
-	count += 1
+	if ups:
+		if time.time() > ups_time:
+			if ups_cycle:
+				debug("Showing UPS status")
+				showUPSstatus(ups_flnm)
+			else:
+				debug("Showing IP address and room and serial numbers")
+				oldIP = showIP(oldIP)
+				showRoomAndSN(config)
+			ups_cycle = not ups_cycle
+			ups_time += ups_update
+	else:
+		# Check IP approximately every hour
+		if count >= 5 * CHECK_TIME:
+			ip = showIP(oldIP)
+			debug(f'Checking IP! count: {count}, oldIP: {oldIP}, ip: {ip}')
+			count = -1
+		count += 1
 
 # Clear display
 lcd_byte(0x01, LCD_CMD)
@@ -555,4 +652,4 @@ removeProcessLock(lockfile)
 
 if DEBUG:
 	print('\n')
-debug('{} done'.format(script))
+debug(f'{script} done')
