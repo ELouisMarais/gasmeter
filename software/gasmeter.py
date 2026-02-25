@@ -107,6 +107,21 @@
 #
 # -----------------------------------------------------------------------------
 #
+# Version: 2.1
+# Author: Louis Marais
+# Start date: 2026-02-26
+# Last modification: 2026-02-26
+#
+# Modifications:
+#
+# 1. Added a check for a large change in the time of day in the main loop
+#    (more than twice ups_update). This can happen when the time was not set
+#    properly at startup and then gets set at a later stage, for example if
+#    network connectivity issues prevented the network time server to
+#    synchronise at startup.
+#
+# -----------------------------------------------------------------------------
+#
 # Version: Next
 # Author: 
 # Start date: 
@@ -128,7 +143,7 @@ import configparser
 import signal
 
 script = os.path.basename(__file__)
-VERSION = "2.0"
+VERSION = "2.1"
 AUTHORS = "Louis Marais"
 
 DEBUG = False
@@ -635,8 +650,12 @@ while running:
 				showRoomAndSN(config)
 			ups_cycle = not ups_cycle
 			ups_time += ups_update
+			# Add a check for a large change of time (more than twice ups_update).
+			timediff = abs(time.time() - ups_time)
+			if timediff > (2 * ups_update):
+				ups_time = time.time() + ups_update
 	else:
-		# Check IP approximately every hour
+		# Check IP approximately every hour (loop time is about 0,2 seconds).
 		if count >= 5 * CHECK_TIME:
 			ip = showIP(oldIP)
 			debug(f'Checking IP! count: {count}, oldIP: {oldIP}, ip: {ip}')
